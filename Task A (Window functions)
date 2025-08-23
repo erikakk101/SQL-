@@ -1,0 +1,90 @@
+1. **Monthly Customer Rank by Spend**
+   - For each month (based on `order_date`), rank customers by **total order value** in that month using `RANK()`.
+   - Output: month (YYYY-MM), customer_id, total_monthly_spend, rank_in_month.
+
+WITH monthly_spend AS (
+-- First, calculate the total value of items ordered whose payments have been made by each customer per month
+    SELECT
+        TO_CHAR(o.order_date, 'YYYY-MM') AS month,
+        o.customer_id,
+        SUM(p.amount) AS total_monthly_spend
+    FROM
+        orders o
+    JOIN
+        payments p ON o.order_id = p.order_id
+    GROUP BY
+        month,
+        o.customer_id
+)
+-- Then, rank customers within each month based on that value
+SELECT
+    month,
+    customer_id,
+    total_monthly_spend,
+    RANK() OVER (
+        PARTITION BY month
+        ORDER BY total_monthly_spend DESC
+    ) AS rank_in_month
+FROM
+    monthly_spend
+ORDER BY
+    month,
+    rank_in_month;
+
+2. **Share of Basket per Item**
+   - For each order, compute each item's **revenue share** in that order:
+     `item_revenue / order_total` using `SUM() OVER (PARTITION BY order_id)`.
+
+SELECT
+    order_id,
+    product_id,
+    quantity,
+    unit_price,
+    quantity * unit_price AS item_revenue,
+    SUM(quantity * unit_price) OVER (PARTITION BY order_id) AS order_total,
+    (quantity * unit_price) / SUM(quantity * unit_price) OVER (PARTITION BY order_id) AS revenue_share
+FROM
+    order_items;
+
+SELECT
+    c.full_name,
+    o.customer_id,
+    o.order_id,
+    o.order_date,
+    LAG(o.order_date, 1) OVER (PARTITION BY o.customer_id ORDER BY o.order_date) AS previous_order_date,
+    AGE(o.order_date, LAG(o.order_date, 1) OVER (PARTITION BY o.customer_id ORDER BY o.order_date)) AS time_since_previous_order
+FROM
+    orders o
+JOIN 
+    customers c ON c.customer_id = o.customer_id
+ORDER BY
+    o.customer_id,
+    o.order_date;
+
+
+WITH ProductRevenue AS (
+    -- Step 1: Calculate total revenue per product
+    SELECT
+        p.product_id,
+        p.product_name,
+        SUM(oi.quantity * oi.unit_price) AS total_revenue
+    FROM
+        order_items oi
+    JOIN
+        products p ON oi.product_id = p.product_id
+    GROUP BY
+        p.product_id,
+        p.product_name
+)
+-- Step 2: Assign quartiles using NTILE() on the calculated revenue
+SELECT
+    product_id,
+    product_name,
+    total_revenue,
+    NTILE(4) OVER (ORDER BY total_revenue DESC) AS revenue_quartile
+FROM
+    ProductRevenue
+ORDER BY
+    revenue_quartile,
+    total_revenue DESC;
+    
