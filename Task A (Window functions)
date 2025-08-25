@@ -61,6 +61,8 @@ ORDER BY
     o.customer_id,
     o.order_date;
 
+4. **Product Revenue Quartiles**
+   - Compute total revenue per product and assign **quartiles** using `NTILE(4)` over total revenue.
 
 WITH ProductRevenue AS (
     -- Step 1: Calculate total revenue per product
@@ -87,7 +89,9 @@ FROM
 ORDER BY
     revenue_quartile,
     total_revenue DESC;
-    
+
+5. **First and Last Purchase Category per Customer**
+   - For each customer, show the **first** and **most recent** product category they've bought using `FIRST_VALUE` and `LAST_VALUE` over `order_date`.
 SELECT DISTINCT
     c.full_name,
     FIRST_VALUE(p.category) OVER (PARTITION BY c.customer_id ORDER BY o.order_date) AS first_purchase_category,
