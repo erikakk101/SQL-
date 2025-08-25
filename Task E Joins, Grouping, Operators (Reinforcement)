@@ -1,0 +1,120 @@
+1. **Average Order Value by City (Delivered Only)**
+    - Output: city, avg_order_value, delivered_orders_count. Order by `avg_order_value` desc. Use `HAVING` to keep cities with at least 2 delivered orders.
+WITH DeliveredOrderTotals AS (
+    -- First, calculate the total value for each individual delivered order
+    SELECT
+        o.order_id,
+        o.customer_id,
+        SUM(oi.quantity * oi.unit_price) AS order_total
+    FROM
+        orders o
+    JOIN
+        order_items oi ON o.order_id = oi.order_id
+    WHERE
+        o.status = 'delivered'
+    GROUP BY
+        o.order_id,
+        o.customer_id
+)
+-- Now, aggregate those order totals by city
+SELECT
+    c.city,
+    AVG(dot.order_total) AS avg_order_value,
+    COUNT(dot.order_id) AS delivered_orders_count
+FROM
+    customers c
+JOIN
+    DeliveredOrderTotals dot ON c.customer_id = dot.customer_id
+GROUP BY
+    c.city
+HAVING
+    COUNT(dot.order_id) >= 2
+ORDER BY
+    avg_order_value DESC;
+
+2. **Category Mix per Customer**
+    - For each customer, list categories purchased and the **count of distinct orders** per category. Order by customer and count desc.
+SELECT
+    c.full_name,
+    p.category,
+    COUNT(DISTINCT o.order_id) AS distinct_order_count
+FROM
+    customers c
+JOIN
+    orders o ON c.customer_id = o.customer_id
+JOIN
+    order_items oi ON o.order_id = oi.order_id
+JOIN
+    products p ON oi.product_id = p.product_id
+GROUP BY
+    c.full_name,
+    p.category
+ORDER BY
+    c.full_name,
+    distinct_order_count DESC;
+
+3. **Set Ops: Overlapping Customers**
+    - Split customers into two sets: those who bought `Electronics` and those who bought `Fitness`. Show:
+      - `UNION` of both sets,
+      - `INTERSECT` (bought both),
+      - `EXCEPT` (bought Electronics but not Fitness).
+
+-- Select customers who bought 'Electronics'
+SELECT DISTINCT c.customer_id, c.full_name
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+WHERE p.category = 'Electronics'
+
+UNION
+
+-- Select customers who bought 'Fitness'
+SELECT DISTINCT c.customer_id, c.full_name
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+WHERE p.category = 'Fitness'
+ORDER BY
+    full_name;
+
+-- Select customers who bought 'Electronics'
+SELECT DISTINCT c.customer_id, c.full_name
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+WHERE p.category = 'Electronics'
+
+INTERSECT
+
+-- Select customers who bought 'Fitness'
+SELECT DISTINCT c.customer_id, c.full_name
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+WHERE p.category = 'Fitness'
+ORDER BY
+    full_name;
+
+-- Select customers who bought 'Electronics'
+SELECT DISTINCT c.customer_id, c.full_name
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+WHERE p.category = 'Electronics'
+
+EXCEPT
+
+-- Subtract customers who bought 'Fitness'
+SELECT DISTINCT c.customer_id, c.full_name
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+WHERE p.category = 'Fitness'
+ORDER BY
+    full_name;
