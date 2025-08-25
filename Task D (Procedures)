@@ -1,0 +1,83 @@
+1. **`sp_apply_category_discount(p_category TEXT, p_percent NUMERIC)`**
+    - Reduce `unit_price` of **active** products in a category by `p_percent` (e.g., 10 = 10%). Prevent negative or zero prices using a `CHECK` at update time.
+CREATE OR REPLACE PROCEDURE sp_apply_category_discount(p_category TEXT, p_percent NUMERIC)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE products
+    SET
+        unit_price = unit_price * (1 - p_percent / 100.0)
+    WHERE
+        category = p_category
+        AND active = TRUE
+        AND unit_price * (1 - p_percent / 100.0) > 0;
+END;
+$$;
+
+-- Example: Apply a 10% discount to all 'Electronics' products
+CALL sp_apply_category_discount('Electronics', 10);
+
+-- Verify the result
+SELECT product_name, unit_price FROM products WHERE category = 'Electronics';
+
+2. **`sp_cancel_order(p_order_id INT)`**
+    - Set order `status` to `cancelled` **only if** it is not already `delivered`.
+    - (Optional) Delete unpaid `payments` if any exist for that order (there shouldn’t be, but handle defensively).
+
+CREATE OR REPLACE PROCEDURE sp_cancel_order(p_order_id INT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    -- Optional: Delete any payments associated with this order.
+    DELETE FROM payments WHERE order_id = p_order_id;
+
+    -- Update the order status to 'cancelled' only if it is not already 'delivered'.
+    UPDATE orders
+    SET
+        status = 'cancelled'
+    WHERE
+        order_id = p_order_id
+        AND status <> 'delivered';
+END;
+$$;
+
+-- Let's try to cancel order #5, which has a status of 'placed'.
+SELECT order_id, status FROM orders WHERE order_id = 5;
+
+-- Call the procedure
+CALL sp_cancel_order(5);
+
+-- Verify the change. The status should now be 'cancelled'.
+SELECT order_id, status FROM orders WHERE order_id = 5;
+
+---
+
+-- Now, let's try to cancel order #1, which is 'delivered'.
+-- The procedure will run, but the UPDATE will not affect the row.
+CALL sp_cancel_order(1);
+
+-- Verify that the status is still 'delivered'.
+SELECT order_id, status FROM orders WHERE order_id = 1;
+
+3. **`sp_reprice_stale_products(p_days INT, p_increase NUMERIC)`**
+    - For products **not ordered** in the last `p_days`, increase `unit_price` by `p_increase` percent.
+CREATE OR REPLACE PROCEDURE sp_reprice_stale_products(p_days INT, p_increase NUMERIC)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE products
+    SET
+        unit_price = unit_price * (1 + p_increase / 100.0)
+    WHERE
+        product_id NOT IN (
+            SELECT DISTINCT oi.product_id
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.order_id
+            WHERE o.order_date >= CURRENT_DATE - (p_days * INTERVAL '1 day')
+        );
+END;
+$$;
+
+-- To increase the price of products not sold in the last 365 days by 5%:
+CALL sp_reprice_stale_products(365, 5);
+
+-- Verify the result by checking the prices of some products
+SELECT product_name, unit_price FROM products;
+
